@@ -1,0 +1,10 @@
+#!/bin/sh
+# cnvim — run nvim (from the nvim-container) against the current directory.
+
+IMAGE=hcssmith/nvim-container
+
+exec docker run --rm -it \
+	-v "$(pwd)":/workspace \
+	-v /tmp/.X11-unix:/tmp/.X11-unix \
+	-e "${DISPLAY:+DISPLAY=$DISPLAY}" \
+	"$IMAGE" nvim "$@"
