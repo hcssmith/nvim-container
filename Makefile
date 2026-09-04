@@ -1,8 +1,11 @@
+TAG ?= hcssmith/nvim-container
+TIMESTAMP ?= $(shell date +%Y%m%d-%H%M%S)
+
 build:
-	docker build . -t hcssmith/nvim-container
+	docker build . -t $(TAG):latest -t $(TAG):$(TIMESTAMP)
 
 debug:
-	docker build --progress=plain . -t hcssmith/nvim-container 2>&1 | tee build.log
+	docker build --progress=plain . -t $(TAG):latest -t $(TAG):$(TIMESTAMP) 2>&1 | tee build.log
 
 run: build
 	docker run --rm -it \

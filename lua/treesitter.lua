@@ -25,8 +25,21 @@ local parsers = {
   'yaml',
 }
 
+-- Load a parser, warning instead of failing silently.
+-- language.add returns nil, errmsg on failure rather than throwing,
+-- so a bare pcall would swallow breakage (e.g. a parser .so with
+-- missing external-scanner symbols after an upstream change).
+local function add(lang)
+  local ok, added, err = pcall(vim.treesitter.language.add, lang)
+  if not ok then
+    vim.notify(string.format('treesitter: error loading parser %q: %s', lang, added), vim.log.levels.WARN)
+  elseif not added then
+    vim.notify(string.format('treesitter: failed to load parser %q: %s', lang, err), vim.log.levels.WARN)
+  end
+end
+
 for _, lang in ipairs(parsers) do
-  pcall(vim.treesitter.language.add, lang)
+  add(lang)
 end
 
 -- Register the parser names; these must match the .so filenames
@@ -37,7 +50,7 @@ local extra = {
 }
 
 for _, lang in ipairs(extra) do
-  pcall(vim.treesitter.language.add, lang)
+  add(lang)
 end
 
 -- Auto-start treesitter highlighting for custom filetypes.
@@ -45,7 +58,10 @@ end
 -- filetypes need an explicit autocommand to call vim.treesitter.start().
 vim.api.nvim_create_autocmd('FileType', {
   pattern = extra,
-  callback = function()
-    pcall(vim.treesitter.start)
+  callback = function(args)
+    local ok, err = pcall(vim.treesitter.start)
+    if not ok then
+      vim.notify(string.format('treesitter: failed to start highlighting for %s: %s', args.match, err), vim.log.levels.WARN)
+    end
   end,
 })

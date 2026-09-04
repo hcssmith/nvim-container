@@ -88,18 +88,31 @@ RUN cd /tmp/markdown/tree-sitter-markdown/src && cc -shared -fPIC -O2 -o /out/ma
 ADD https://github.com/tree-sitter-grammars/tree-sitter-vim.git /tmp/vim
 RUN cd /tmp/vim/src && cc -shared -fPIC -O2 -o /out/vim.so parser.c scanner.c -I.
 
-ADD --keep-git-dir=true https://github.com/gmr/tree-sitter-postgres.git /tmp/postgres
+ADD --keep-git-dir=true https://github.com/gmr/tree-sitter-postgres.git#v1.2.4 /tmp/postgres
 RUN cd /tmp/postgres && git lfs pull && \
-    cd /tmp/postgres/postgres/src && cc -shared -fPIC -O2 -o /out/postgres.so parser.c -I. && \
+    cd /tmp/postgres/postgres/src && cc -shared -fPIC -O2 -o /out/postgres.so parser.c scanner.c -I. && \
     cd /tmp/postgres/plpgsql/src && cc -shared -fPIC -O2 -o /out/plpgsql.so parser.c scanner.c -I.
 
 ADD https://github.com/tree-sitter-grammars/tree-sitter-yaml.git /tmp/yaml
 RUN cd /tmp/yaml/src && cc -shared -fPIC -O2 -o /out/yaml.so parser.c scanner.c schema.core.c schema.json.c schema.legacy.c -I.
 
 ADD https://github.com/nvim-treesitter/nvim-treesitter.git /tmp/nvim-treesitter
+# tree-sitter-postgres queries use PCRE-style (?i), but Neovim's #match?
+# compiles patterns as very-magic Vim regex, where (?i) is invalid
+# (E866: Misplaced ?). Rewrite to Vim's case flag "\c". The scm file needs
+# "\\c" (two chars) because tree-sitter query strings unescape "\\" first.
+# Additionally, dollar_quoted_string is a single leaf token INCLUDING the
+# "$$" delimiters, which the plpgsql grammar cannot parse, so the injected
+# region is offset by 2 columns on each side to strip them. (Assumes bare
+# $$ quoting; $tag$ bodies will not highlight.) Fail the build if the
+# rewrites do not cover every predicate.
 RUN cp -r /tmp/nvim-treesitter/runtime/queries /out/queries && rm -rf /tmp/nvim-treesitter && rm -rf /out/queries/query && \
     mkdir -p /out/queries/postgres && cp -r /tmp/postgres/postgres/queries/* /out/queries/postgres/ && \
-    mkdir -p /out/queries/plpgsql && cp -r /tmp/postgres/plpgsql/queries/* /out/queries/plpgsql/
+    mkdir -p /out/queries/plpgsql && cp -r /tmp/postgres/plpgsql/queries/* /out/queries/plpgsql/ && \
+    sed -i 's|(?i)|\\\\c|g' /out/queries/postgres/*.scm /out/queries/plpgsql/*.scm && \
+    sed -i 's|(#set! injection.language|\n(#offset! @injection.content 0 2 0 -2)\n(#set! injection.language|g' /out/queries/postgres/injections.scm && \
+    ! grep -rn '(?i)' /out/queries/postgres /out/queries/plpgsql && \
+    test "$(grep -c '(#offset!' /out/queries/postgres/injections.scm)" -eq "$(grep -c '(#set! injection.language' /out/queries/postgres/injections.scm)"
 
 FROM alpine:latest
 
