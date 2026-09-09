@@ -39,6 +39,17 @@ vim.filetype.add({
 
 vim.cmd.colorscheme("tokyonight-storm")
 
+-- Font for GUI clients (Neovide reads 'guifont'). The family must exist on
+-- the machine rendering the GUI: FiraCode Nerd Font Mono is on this host and
+-- the Nerd Font glyphs cover the devicons used by the statusline/tabline.
+vim.opt.guifont = "FiraCode Nerd Font Mono:h8"
+vim.g.neovide_position_animation_length = 0
+vim.g.neovide_cursor_animation_length = 0.00
+vim.g.neovide_cursor_trail_size = 0
+vim.g.neovide_cursor_animate_in_insert_mode = false
+vim.g.neovide_cursor_animate_command_line = false
+vim.g.neovide_scroll_animation_far_lines = 0
+vim.g.neovide_scroll_animation_length = 0.00
 
 require('telescope')
 require('treesitter')

@@ -1,7 +1,42 @@
 #!/bin/sh
 # cnvim — run nvim (from the nvim-container) against the current directory.
+#
+# Usage: cnvim [--gui] [nvim args...]
+#
+#   cnvim file.sql        open in the terminal, as before
+#   cnvim --gui file.sql  headless nvim server in the container, Neovide
+#                         on the host attaches to it over 127.0.0.1
+#                         (override the port with CNVIM_PORT)
 
 IMAGE=hcssmith/nvim-container
+PORT="${CNVIM_PORT:-7777}"
+
+if [ "${1:-}" = "--gui" ]; then
+	shift
+	NAME="cnvim-gui-$$"
+	docker run --rm -d --name "$NAME" \
+		-p "127.0.0.1:$PORT:$PORT" \
+		-v "$(pwd)":/workspace \
+		-v /tmp/.X11-unix:/tmp/.X11-unix \
+		-e "${DISPLAY:+DISPLAY=$DISPLAY}" \
+		"$IMAGE" nvim --headless --listen 0.0.0.0:$PORT "$@" || exit 1
+	# tear the server down when Neovide closes (or on Ctrl-C)
+	trap 'docker rm -f "$NAME" >/dev/null 2>&1' EXIT INT TERM
+	# wait for the RPC port to listen (00000000:HEX = 0.0.0.0:PORT in /proc/net/tcp)
+	HEX=$(printf '%04X' "$PORT")
+	i=0
+	until docker exec "$NAME" sh -c "grep -q '00000000:$HEX ' /proc/net/tcp" 2>/dev/null; do
+		i=$((i + 1))
+		if [ "$i" -gt 50 ]; then
+			echo "cnvim: nvim server did not come up on port $PORT" >&2
+			exit 1
+		fi
+		sleep 0.2
+	done
+	# no tcp:// prefix: both nvim --server and neovide want bare host:port
+	neovide --no-fork --server "127.0.0.1:$PORT"
+	exit
+fi
 
 exec docker run --rm -it \
 	-v "$(pwd)":/workspace \
