@@ -74,5 +74,4 @@ require('tabline')
 require('zen')
 require('ui')
 require('buffers')
-require('pi-agent')
 
