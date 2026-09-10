@@ -6,13 +6,36 @@
 #   cnvim file.sql        open in the terminal, as before
 #   cnvim --gui file.sql  headless nvim server in the container, Neovide
 #                         on the host attaches to it over 127.0.0.1
-#                         (override the port with CNVIM_PORT)
+#                         (override the port with CNVIM_PORT; if it or 7777
+#                         is already busy, the next free port is used so
+#                         several GUI instances can run at once)
 
 IMAGE=hcssmith/nvim-container
 PORT="${CNVIM_PORT:-7777}"
 
+port_in_use() {
+	# true (exit 0) when something on this host already listens on TCP port $1
+	if command -v ss >/dev/null 2>&1; then
+		ss -H -ltn "sport = :$1" 2>/dev/null | grep -q .
+	else
+		nc -z 127.0.0.1 "$1" >/dev/null 2>&1
+	fi
+}
+
 if [ "${1:-}" = "--gui" ]; then
 	shift
+	START_PORT=$PORT
+	i=0
+	while port_in_use "$PORT"; do
+		i=$((i + 1))
+		if [ "$i" -gt 100 ]; then
+			echo "cnvim: no free port from $START_PORT to $PORT" >&2
+			exit 1
+		fi
+		PORT=$((PORT + 1))
+	done
+	[ "$PORT" = "$START_PORT" ] ||
+		echo "cnvim: port $START_PORT in use, using $PORT" >&2
 	NAME="cnvim-gui-$$"
 	docker run --rm -d --name "$NAME" \
 		-p "127.0.0.1:$PORT:$PORT" \
