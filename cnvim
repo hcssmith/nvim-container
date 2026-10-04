@@ -38,6 +38,7 @@ if [ "${1:-}" = "--gui" ]; then
 		echo "cnvim: port $START_PORT in use, using $PORT" >&2
 	NAME="cnvim-gui-$$"
 	docker run --rm -d --name "$NAME" \
+		--security-opt label=disable \
 		-p "127.0.0.1:$PORT:$PORT" \
 		-v "$(pwd)":/workspace \
 		-v /tmp/.X11-unix:/tmp/.X11-unix \
@@ -57,11 +58,13 @@ if [ "${1:-}" = "--gui" ]; then
 		sleep 0.2
 	done
 	# no tcp:// prefix: both nvim --server and neovide want bare host:port
-	neovide --no-fork --server "127.0.0.1:$PORT"
+	flatpak run dev.neovide.neovide --no-fork --server "127.0.0.1:$PORT"
 	exit
 fi
 
+# label=disable: no-op unless selinux-enabled is set in daemon.json
 exec docker run --rm -it \
+	--security-opt label=disable \
 	-v "$(pwd)":/workspace \
 	-v /tmp/.X11-unix:/tmp/.X11-unix \
 	-e "${DISPLAY:+DISPLAY=$DISPLAY}" \
